@@ -11,6 +11,8 @@ usá-lo como contexto.
 > começando do zero. Os exemplos e testes usam só nomes e números fictícios. As notas "(usuário,
 > data)" nos comentários guardam o porquê de cada decisão.
 >
+> **Licença.** O código próprio é MIT ([LICENSE](LICENSE)); os arquivos de terceiros mantêm as licenças deles.
+>
 > **⚠️ Termos de uso.** A extensão automatiza o WhatsApp Web (lê conversas e, pelo MCP, pode enviar
 > mensagens com aprovação). Os termos do WhatsApp restringem automação; use por sua conta e risco,
 > só na sua própria conta. `extensao/vendor/wppconnect-wa.js` é de terceiros e tem licença
