@@ -41,8 +41,14 @@ Oi, conseguiu ver aquele documento?
 > CONTRATO DE PRESTAÇÃO DE SERVIÇOS
 ```
 
-Não há acervo nem captura ao vivo. A exportação acontece só quando você clica, e só da
-conversa que está aberta. O que fica guardado é descrito em [O que fica guardado](#o-que-fica-guardado).
+Não há captura ao vivo. A exportação começa quando você clica: *Exportar* grava a conversa
+aberta, e *Exportar todas* grava todas as conversas individuais. Depois do primeiro
+*Exportar todas*, uma rodada automática repete a cada 30 minutos só com o que chegou de novo,
+e a primeira rodada sai 5 minutos depois de o `wa servir` ligar. Ela vem ligada no
+`config.exemplo.toml` (`[rotina] ligada = true`). Para desligar, use o liga/desliga do painel,
+que vale mais que o arquivo, ou ponha `ligada = false`. Com `abrir_chrome = true`, o servidor
+abre o Chrome no WhatsApp Web quando não encontra a extensão. O que fica guardado é descrito
+em [O que fica guardado](#o-que-fica-guardado).
 
 Além disso, com o WhatsApp Web aberto, cada áudio que aparece na tela da conversa aberta
 ganha **a transcrição logo embaixo**, com o botão *Copiar*. É o mesmo Gemini, e o
