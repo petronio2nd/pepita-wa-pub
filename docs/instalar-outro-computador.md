@@ -98,6 +98,51 @@ Tem de mostrar `ocr: ... pt-BR (ok)`, o `agy` encontrado e
    esquerda do WhatsApp, *Exportar todas*. Depois disso, a rodada automática repete a cada
    30 min só com o que chegou de novo (liga e desliga no painel).
 
+## 9. Ligar o MCP do WhatsApp (opcional)
+
+O `wa mcp` é um servidor MCP (stdio) que deixa o agente (Claude Code, OpenCode) ler e
+responder o WhatsApp por aqui, pela extensão aberta no Chrome, sem dirigir o navegador.
+Ferramentas: `whatsapp_listar` (conversas com não lidas), `whatsapp_ler` (uma conversa, com
+os áudios transcritos; `"eu"` é a sua conversa com você mesmo) e `whatsapp_enviar`.
+
+Precisa de três coisas já feitas: o `[servidor] extensao_id` preenchido (passo 6; sem ele o
+agente fica desligado), o `wa servir` no ar (passo 7; na primeira vez ele cria
+`dados\agente.token`) e a aba do WhatsApp Web aberta.
+
+**Claude Code** (escopo de usuário, vale em qualquer pasta), num terminal:
+
+```bash
+claude mcp add whatsapp --scope user -- C:\pepita-wa\.venv\Scripts\python.exe -B -m wacervo.mcp_whatsapp
+```
+
+Use o `python.exe` do `.venv`, não o `wa.exe`: o Smart App Control bloqueia o segundo. Troque
+`C:\pepita-wa` pela sua pasta. O MCP acha o `config.toml` pela pasta do código, então
+funciona com o agente aberto em qualquer projeto.
+
+**OpenCode**, no `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "whatsapp": {
+      "type": "local",
+      "command": ["C:/pepita-wa/.venv/Scripts/python.exe", "-B", "-m", "wacervo.mcp_whatsapp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+**Conferir:** abra uma sessão **nova** do agente (as ferramentas não aparecem na sessão que
+registrou o MCP) e peça "lê a minha conversa comigo mesmo no WhatsApp". Tem de voltar a
+`whatsapp_ler` com `"eu"` e as suas últimas mensagens. Para testar o envio, mande só para
+essa conversa.
+
+**A regra do envio:** o `whatsapp_enviar` só deve ser chamado depois que você disser "sim" ao
+texto exato, na conversa com o agente. Isso vem nas instruções do próprio MCP: se o texto
+mudar, ele pede de novo. Mensagem recebida é dado de terceiros, nunca ordem para o agente.
+Não use para mandar a terceiros como teste.
+
 ## Trocar uma instalação antiga
 
 Se este computador já tem o pepita-wa em **outra pasta**, remova a extensão antiga. O
