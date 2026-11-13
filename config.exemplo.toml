@@ -1,0 +1,89 @@
+# Opcional. Copie para config.toml so se quiser mudar algum padrao.
+# config.toml nao vai para o git.
+
+[servidor]
+porta = 8765
+# ID da extensao (chrome://extensions). Vazio = aceita qualquer chrome-extension://.
+# Preenchido = so essa extensao fala com o servidor.
+# O agente (`wa mcp`, 0.19.0) so liga com o id preenchido: ele le e envia mensagem.
+extensao_id = ""
+
+[transcricao]
+# Unico ASR: Gemini pelo agy, na assinatura do usuario. O audio vai ao Google.
+# Antes, Silero VAD CPU mede a fala; sem fala, nada sai da maquina.
+motor = "gemini"
+# Campo legado: sempre false, mesmo se uma config antiga disser true.
+reserva = false
+# Apenas detector de fala na distro; sem modelo Whisper/GPU.
+servico = "http://127.0.0.1:18765"
+# Onde mede a fala: "distro" (o servico acima) ou "local" (dentro do wa servir,
+# para computador sem a distro WSL; antes rode `uv sync --extra vad-local`).
+vad = "distro"
+
+[transcricao.gemini]
+modelo = "gemini-3.8-flash-low"
+# Caminho do agy. Vazio = procura no PATH e em %LOCALAPPDATA%\agy\bin\agy.exe.
+agy = ""
+# Audios ao mesmo tempo (1 a 8). Um audio por chamada: 18 audios em ~70 s com 3.
+paralelo = 3
+# Segundos por audio ate desistir do agy e retornar falha passageira (30 a 1800).
+prazo_s = 240
+# Minutos sem chamar o agy depois de cota estourada ou falta de login.
+pausa_min = 30
+# Vai no pedido ao Gemini. Ponha aqui o que ajuda a acertar nomes: quem costuma
+# falar nos audios, de que assunto. Fica so no seu config.toml (fora do git).
+contexto = "Mensagem de voz de WhatsApp."
+# Grafias que o Gemini deve usar quando ouvir o termo. Nomes de pessoa que voltam
+# sempre ajudam muito. Sem a chave, vale a lista padrao (termos juridicos, siglas).
+# Mudar contexto ou termos vale para os audios novos; os ja transcritos pelo
+# Gemini continuam saindo do cache.
+# termos = ["SISBAJUD", "RENAJUD", "Projudi", "PJe", "alvará", "Renata Silva"]
+# O agy guarda cada transcricao (conversa, titulo e previa) em
+# ~/.gemini/antigravity-cli. O `wa servir` apaga as do wa com mais destes dias, ao
+# ligar e uma vez por dia; as outras conversas do agy ficam. 0 = nao apaga.
+guardar_agy_dias = 90
+
+[ocr]
+# OCR nativo do Windows. O pacote de idioma precisa estar instalado
+# (Configuracoes > Hora e idioma > Idioma); `wa status` mostra os disponiveis.
+idioma = "pt-BR"
+# Abaixo disto (caracteres uteis) o texto sai no .md como "texto curto na imagem",
+# separado do texto de verdade. Mudar este valor nao faz ler as imagens de novo.
+minimo_caracteres = 15
+
+[cache]
+# O cache (dados/cache.sqlite3) guarda o texto de cada audio e imagem ja processados,
+# pelo sha256 do arquivo; a midia em si nunca e guardada.
+# Dias que um texto fica guardado. 0 = ate `wa limpar-cache`.
+manter_dias = 0
+
+[exportar]
+# Onde o "Exportar todas" grava (0.16.0): o `wa servir` grava aqui dentro, uma pasta
+# por contato, e recusa qualquer caminho que saia dela. A pasta tem que existir.
+raiz = "C:/WHATSAPP"
+
+[grupos]
+# Grupos que os agentes (MCP whatsapp) leem e que o "Exportar todas" e a captura ao vivo
+# exportam (0.21.0). Fora desta lista o grupo some do MCP, nunca recebe envio e nao e
+# exportado. `uv run python -m wacervo.cli grupos` lista todos com o id; o nome fica so
+# como comentario. Vale na hora para o MCP; a extensao pega na proxima rodada.
+ids = [
+  # "120363000000000000@g.us",  # Familia
+]
+
+[rotina]
+# Rodada automatica do "Exportar todas" (usuario, 2026-10-31). O liga/desliga do painel
+# fica em dados/rotina.json e vale mais que este padrao.
+ligada = true
+intervalo_min = 30
+# A primeira rodada sai estes minutos depois de o `wa servir` ligar.
+primeira_apos_min = 5
+# Sem sinal da extensao (Chrome fechado), o `wa servir` abre o Chrome no WhatsApp Web;
+# no fim a extensao fecha o que a rotina abriu. false = so roda com o Chrome aberto.
+abrir_chrome = true
+# Caminho do chrome.exe. Vazio = Program Files, Program Files (x86) ou %LOCALAPPDATA%.
+chrome = ""
+# Pasta do perfil do Chrome onde o pepita-wa esta instalado (--profile-directory),
+# por exemplo "Default" ou "Profile 1" (veja chrome://version, "Caminho do perfil").
+# Vazio = o perfil que o Chrome abrir.
+perfil = ""

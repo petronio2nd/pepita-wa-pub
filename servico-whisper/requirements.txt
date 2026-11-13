@@ -1,0 +1,12 @@
+# Versoes presas: as mesmas do uv.lock do Windows na 0.5.1, a ultima em que o
+# whisper rodou la. Mudar aqui pede `docker compose up -d --build`.
+faster-whisper==1.2.1
+ctranslate2==4.8.2
+# O av 19 tirou o `metadata_errors` que o faster-whisper 1.2.1 passa ao abrir o
+# audio ("open() got an unexpected keyword argument").
+av==18.1.0
+huggingface-hub==1.32.0
+onnxruntime==1.30.0
+tokenizers==0.23.2
+numpy==2.5.3
+tqdm==4.70.1

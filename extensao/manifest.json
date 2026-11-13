@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "pepita-wa",
+  "version": "0.23.1",
+  "description": "Exporta a conversa aberta no WhatsApp Web em Markdown, com audios transcritos e texto das imagens, tudo no pepita-wa local.",
+  "icons": {
+    "16": "icones/icone-16.png",
+    "32": "icones/icone-32.png",
+    "48": "icones/icone-48.png",
+    "128": "icones/icone-128.png"
+  },
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "https://web.whatsapp.com/*"
+  ],
+  "background": {
+    "service_worker": "fundo.js"
+  },
+  "action": {
+    "default_title": "pepita-wa: exportar esta conversa",
+    "default_icon": {
+      "16": "icones/icone-16.png",
+      "32": "icones/icone-32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "config-wpp.js",
+        "vendor/wppconnect-wa.js",
+        "nucleo-pagina.js",
+        "pagina.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://web.whatsapp.com/*"
+      ],
+      "js": [
+        "nucleo.js",
+        "markdown.js",
+        "ponte.js"
+      ],
+      "run_at": "document_end"
+    }
+  ]
+}

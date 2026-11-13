@@ -1,0 +1,18 @@
+# Conteúdo pessoal: nunca versionar
+# midia do desenho antigo (audio, PDF, imagem), guardada a pedido do usuario
+midia-antiga/
+dados/
+entrada/
+config.toml
+
+.venv/
+__pycache__/
+*.pyc
+
+.pytest_cache/
+# .claude/ fica fora, menos as skills do projeto (sem dado pessoal)
+.claude/*
+!.claude/skills/
+
+# pacote "so exportar" gerado por ferramentas/pacote_so_exportar.py
+dist/

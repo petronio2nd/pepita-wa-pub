@@ -1,0 +1,18 @@
+# Servico de transcricao do pepita-wa na distro ubuntu-dev. Subir ou atualizar:
+#   cd /caminho/do/pepita-wa-pub/servico-whisper && docker compose up -d --build
+# Volta sozinho com a distro (restart: unless-stopped; o docker.service sobe com ela).
+name: pepita-wa
+services:
+  whisper:
+    build: .
+    image: pepita-wa-whisper:local
+    container_name: pepita_wa_whisper
+    restart: unless-stopped
+    environment:
+      WHISPER_PORTA: "18765"
+      TZ: America/Sao_Paulo  # a hora do log igual a do Windows
+    # So 127.0.0.1: sem endereco o Docker publica em 0.0.0.0. Porta abaixo de
+    # 32768: o wslrelay tenta abrir a porta no Windows uma vez so, na subida, e
+    # porta da faixa dinamica pode estar ocupada nesse instante.
+    ports:
+      - "127.0.0.1:18765:18765"
