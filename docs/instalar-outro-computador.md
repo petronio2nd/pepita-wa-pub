@@ -10,6 +10,14 @@ desse computador. Quem só quer exportar, sem transcrição, usa a versão só e
 O que sai da máquina: só o áudio com fala, que vai ao Google pelo `agy`, na conta de quem
 instalou. Imagem, OCR, conversa e cache ficam no computador.
 
+**Recomendação: transcreva com o Gemini Flash pelo `agy`.** É o único motor e já vem como
+padrão (`[transcricao.gemini] modelo = "gemini-3.8-flash-low"`). No teste do autor com 18
+áudios reais de WhatsApp, o Whisper local errou 21 nomes e termos técnicos, e o Gemini
+Flash, com a lista de termos, acertou todos. Não precisa de GPU, e o uso do dia a dia
+costuma caber no plano gratuito (veja "Cota" no fim). Ponha em `[transcricao.gemini] termos`
+os nomes que ele deve grafar certo (pessoas, empresas, siglas): é o que mais melhora o
+resultado.
+
 ## 1. O que precisa antes
 
 - Windows 10 ou 11 e o Google Chrome.
@@ -89,6 +97,28 @@ Tem de mostrar `ocr: ... pt-BR (ok)`, o `agy` encontrado e
 4. Para exportar todas as conversas individuais: o botão do pepita-wa na barra da
    esquerda do WhatsApp, *Exportar todas*. Depois disso, a rodada automática repete a cada
    30 min só com o que chegou de novo (liga e desliga no painel).
+
+## Trocar uma instalação antiga
+
+Se este computador já tem o pepita-wa em **outra pasta**, remova a extensão antiga. O
+Chrome dá à extensão carregada sem compactação um ID tirado do caminho da pasta: pasta nova
+é extensão nova. Com as duas ligadas, as duas entram no WhatsApp Web (transcrição e rodada
+automática em dobro), e o servidor recusa a nova (`403 origem nao permitida`) enquanto o
+`extensao_id` for o antigo. Na ordem:
+
+1. Pare o servidor antigo (`ferramentas\parar-servidor.cmd` na pasta antiga). Se houver um
+   atalho em `shell:startup` apontando para ela, apague-o ou aponte-o para a nova: dois
+   servidores disputam a mesma porta.
+2. Copie o `config.toml` e a pasta `dados\` da pasta antiga para a nova. Assim ficam o cache
+   das transcrições e as marcas do que já foi exportado, e nada se repete.
+3. Em `chrome://extensions`, remova a pepita-wa antiga e carregue a pasta `extensao` da nova
+   (passo 6).
+4. Ponha o ID novo em `[servidor] extensao_id`, rode o passo 3 e suba o servidor (passo 7).
+5. Recarregue a aba do WhatsApp Web e ligue de novo a rodada automática no painel: remover
+   a extensão apaga as preferências que ela guardava no Chrome.
+
+Se você só trocou os arquivos **na mesma pasta**, não remova nada: em `chrome://extensions`,
+clique em recarregar na pepita-wa.
 
 ## Bom saber
 
