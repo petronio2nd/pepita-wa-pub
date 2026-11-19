@@ -764,13 +764,13 @@ test('partesDoArquivo corta em pedacos e manda ao menos uma parte', () => {
 
 test('motivoParaNaoExportarTodas: fora do ar, servidor velho, pasta sem existir e transcricao parada', () => {
   const { motivoParaNaoExportarTodas: motivo } = require('../nucleo.js');
-  const bom = { ok: true, exportar: { raiz: 'D:/70-WHATSAPP', existe: true }, transcricao: { bloqueio: null } };
+  const bom = { ok: true, exportar: { raiz: 'C:/WHATSAPP', existe: true }, transcricao: { bloqueio: null } };
   assert.equal(motivo(bom), null);
   assert.equal(motivo(bom, { automatica: true }), null);
   assert.match(motivo({ ok: false, erro: 'pepita-wa fora do ar em http://127.0.0.1:8765/status' }), /fora do ar/);
   assert.match(motivo(null), /fora do ar/);
   assert.match(motivo({ ok: true }), /anterior a 0\.16\.0/);
-  assert.match(motivo({ ...bom, exportar: { raiz: 'D:/70-WHATSAPP', existe: false } }), /D:\/70-WHATSAPP nao existe/);
+  assert.match(motivo({ ...bom, exportar: { raiz: 'C:/WHATSAPP', existe: false } }), /C:\/WHATSAPP nao existe/);
   const parada = { ...bom, transcricao: { bloqueio: 'agy sem login e whisper fora do ar' } };
   // O clique pode exportar sem transcricao (o usuario ve o aviso); a automatica pula.
   assert.equal(motivo(parada), null);
@@ -866,4 +866,12 @@ test('todas: grupo so entra se o usuario o escolheu (ids em grupos); o resto con
   );
   // O id escolhido nao vale para quem nao e grupo: pessoa listada em `grupos` nada muda.
   assert.deepEqual(selecionarConversas(lista, { grupos: ['556290000000@c.us'] }).map((c) => c.nome), ['Renata Silva']);
+});
+
+test('SEG-08 (L2): nome longo nao termina em ponto e extensao de risco ganha .bin', () => {
+  const nomes = require('../nucleo.js').nomesDosAnexos([
+    { id: 'a', t: 1789752000, tipo: 'document', arquivo: 'a'.repeat(75) + '.exe.x', mimetype: 'application/octet-stream' },
+  ]);
+  const nome = nomes.get('a');
+  assert.ok(!/\.$/.test(nome) && nome.endsWith('.bin'), nome);
 });

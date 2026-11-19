@@ -178,7 +178,7 @@ wa servir     (Python, Windows)     /transcrever · /ocr (Windows.Media.Ocr) · 
 pepita_wa_whisper (container na distro WSL2)   faster-whisper na GPU
 ```
 
-- O acesso ao WhatsApp é feito pelo [wa-js](https://github.com/wppconnect-team/wa-js) 4.7.2
+- O acesso ao WhatsApp é feito pelo [wa-js](https://github.com/wppconnect-team/wa-js) 4.8.2
   (Apache-2.0), em `extensao/vendor/`, **modificado** por `ferramentas/patch_wajs.py` (aviso no topo do arquivo).
 - O servidor só escuta em `127.0.0.1`. Ele recusa `Host` diferente de
   `127.0.0.1`/`localhost` (contra DNS rebinding) e qualquer `Origin` que não seja

@@ -1,6 +1,6 @@
 """Gravacao do "Exportar todas" pelo `wa servir` (0.16.0).
 
-Antes, a extensao gravava em D:\\70-WHATSAPP pelo seletor de pasta da pagina do
+Antes, a extensao gravava em C:\\WHATSAPP pelo seletor de pasta da pagina do
 WhatsApp. A rodada automatica (usuario, 2026-10-31) nao tem clique para abrir o
 seletor, e o Chromium nao deixa a extensao guardar a pasta escolhida fora da
 origem do WhatsApp. Agora a extensao manda o .md e os anexos para ca e o

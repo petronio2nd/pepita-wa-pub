@@ -168,6 +168,39 @@ def test_config_da_rotina(tmp_path):
     assert cfg.rotina.intervalo_min == 60 and cfg.rotina.perfil == "Profile 1" and cfg.rotina.ligada is True
 
 
+@pytest.mark.sem_token
+def test_programa_local_le_a_rotina_mas_so_liga_com_o_token(tmp_path):
+    """M2 (auditoria MCP, 14/11/2026): sem Origin, o GET /rotina segue aberto (o painel le); ligar
+    ou desligar pede o token de dados/agente.token."""
+    from conftest import TOKEN_TESTE
+
+    rotina = Rotina(ConfigRotina(), tmp_path / "rotina.json", lancar=lambda c: None, relogio=Relogio())
+    cfg = Config(raiz=tmp_path)
+    cache = Cache(cfg.caminho_cache)
+    s = ServidorLocal(cfg, cache, Motores(transcrever=lambda d: "", ler_imagem=lambda d: ""), porta=0, rotina=rotina)
+    s.em_segundo_plano()
+
+    def pedir(metodo, rota, corpo=None, cab=None):
+        con = http.client.HTTPConnection("127.0.0.1", s.porta, timeout=5)
+        con.request(metodo, rota, body=json.dumps(corpo).encode() if corpo is not None else None,
+                    headers={"Content-Type": "application/json", **(cab or {})})
+        resp = con.getresponse()
+        dados = json.loads(resp.read() or b"{}")
+        con.close()
+        return resp.status, dados
+
+    try:
+        assert pedir("GET", "/rotina")[0] == 200
+        assert pedir("POST", "/rotina", {"ligada": False})[0] == 403
+        assert rotina.ligada is True
+        assert pedir("POST", "/rotina", {"ligada": False}, {"X-Wacervo-Token": TOKEN_TESTE})[0] == 200
+        assert rotina.ligada is False
+    finally:
+        s.shutdown()
+        s.server_close()
+        cache.fechar()
+
+
 def test_rotas_da_rotina_pelo_servidor(tmp_path):
     relogio = Relogio()
     rotina = Rotina(ConfigRotina(), tmp_path / "rotina.json", lancar=lambda c: None, relogio=relogio)

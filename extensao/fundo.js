@@ -8,6 +8,9 @@ importScripts('nucleo.js');
 const N = globalThis.wacervoNucleo;
 
 const PORTA_PADRAO = 8765;
+// SEG-10: todo pedido ao servidor leva este cabecalho. Pagina web nao consegue mandar cabecalho
+// proprio sem preflight (que o servidor recusa), entao o `wa servir` o exige de quem vem sem `Origin`.
+const CABECALHO_PROPRIO = { 'X-Pepita-WA': '1' };
 // A versao "so exportar" (ferramentas/pacote_so_exportar.py) nao tem servidor: troca para false.
 const ROTINA = true;
 // Ponte do agente (`wa mcp`, 0.19.0). A versao "so exportar" troca para false.
@@ -30,7 +33,7 @@ function deBase64(texto) {
 async function status() {
   const url = `http://127.0.0.1:${await porta()}/status`;
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    const resp = await fetch(url, { headers: CABECALHO_PROPRIO, signal: AbortSignal.timeout(3000) });
     return { ok: resp.ok, ...(await resp.json()) };
   } catch (erro) {
     return { ok: false, erro: `pepita-wa fora do ar em ${url}` };
@@ -59,7 +62,7 @@ async function processar({ rota, base64, duracao, op }) {
   try {
     resp = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
+      headers: { ...CABECALHO_PROPRIO, 'Content-Type': 'application/octet-stream' },
       body: deBase64(base64),
       signal: controle.signal,
     });
@@ -89,15 +92,16 @@ async function processar({ rota, base64, duracao, op }) {
 
 // Rotas JSON do servidor (marcas, rodada, lote, rotina) e a gravacao (corpo em
 // bytes). Fora do ar ou recusado, devolve {erro, tipo} como o processar.
-async function pedirServidor(rota, { corpo, bytes, prazo = 15000 } = {}) {
+async function pedirServidor(rota, { corpo, bytes, prazo = 15000, versao = '' } = {}) {
   const url = `http://127.0.0.1:${await porta()}${rota}`;
   let resp;
   try {
     const comCorpo = corpo !== undefined || bytes !== undefined;
     resp = await fetch(url, {
       method: comCorpo ? 'POST' : 'GET',
-      headers: bytes !== undefined ? { 'Content-Type': 'application/octet-stream' }
-        : corpo !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: { ...CABECALHO_PROPRIO, 'X-Pepita-WA-Versao': versao,
+        ...(bytes !== undefined ? { 'Content-Type': 'application/octet-stream' }
+          : corpo !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: bytes !== undefined ? bytes : corpo !== undefined ? JSON.stringify(corpo) : undefined,
       signal: AbortSignal.timeout(prazo),
     });
@@ -112,12 +116,12 @@ async function pedirServidor(rota, { corpo, bytes, prazo = 15000 } = {}) {
   return { ok: true, dados };
 }
 
-const marcas = (rota, corpo) => pedirServidor(rota, { corpo });
+const marcas = (rota, corpo, versao) => pedirServidor(rota, { corpo, versao });
 
 // Uma parte de um arquivo do "Exportar todas" (o servidor grava dentro da raiz dele).
-function gravar({ caminho, lote, base64, deslocamento = 0, fim = true, livre = false }) {
+function gravar({ caminho, lote, base64, deslocamento = 0, fim = true, livre = false, versao }) {
   const q = new URLSearchParams({ caminho, lote, deslocamento: String(deslocamento), fim: fim ? '1' : '0', livre: livre ? '1' : '0' });
-  return pedirServidor(`/gravar?${q}`, { bytes: deBase64(base64 || ''), prazo: 2 * 60 * 1000 });
+  return pedirServidor(`/gravar?${q}`, { bytes: deBase64(base64 || ''), prazo: 2 * 60 * 1000, versao });
 }
 
 // ---------- trava unica entre o clique e a rodada automatica ----------
@@ -331,7 +335,7 @@ if (ROTINA) {
 // terminar para pegar o proximo. Cada volta chama uma API da extensao, o que mantem
 // o service worker acordado enquanto houver aba do WhatsApp; sem aba, o laco para, e
 // o alarme de 1 min, a aba que carrega ou qualquer mensagem da ponte o religa.
-const PRAZO_NA_ABA = { listar: 35000, ler: 145000, enviar: 40000 };
+const PRAZO_NA_ABA = { listar: 35000, ler: 145000, enviar: 40000, arquivar: 40000 };
 let agenteRodando = false;
 
 function comPrazo(promessa, ms) {
@@ -418,7 +422,11 @@ chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
     return true;
   }
   if (msg?.tipo === 'marcas') {
-    marcas('/marcas').then(responder);
+    marcas(`/marcas?versao=${encodeURIComponent(msg.versao || '')}`).then(responder);
+    return true;
+  }
+  if (msg?.tipo === 'importadas') {
+    marcas(`/importadas?id=${encodeURIComponent(msg.id || '')}`).then(responder);
     return true;
   }
   // So a linha do painel: GET /rodada nao traz as marcas de todas as conversas.
@@ -427,7 +435,7 @@ chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
     return true;
   }
   if (msg?.tipo === 'marcar' || msg?.tipo === 'rodada') {
-    marcas(msg.tipo === 'marcar' ? '/marca' : '/rodada', msg.corpo || {}).then(responder);
+    marcas(msg.tipo === 'marcar' ? '/marca' : '/rodada', msg.corpo || {}, msg.versao).then(responder);
     return true;
   }
   if (msg?.tipo === 'abortar') {

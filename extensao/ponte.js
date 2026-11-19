@@ -13,7 +13,7 @@
   const PRAZO = {
     chat: 5000, audio: 10000, coletar: 60000, coletarConversa: 60000, listarConversas: 60000,
     midia: 60000, midiaGrande: 300000, cancelar: 5000,
-    agenteListar: 30000, agenteLer: 60000, agenteEnviar: 30000, agenteGrupos: 30000,
+    agenteListar: 30000, agenteLer: 60000, agenteEnviar: 30000, agenteArquivar: 30000, agenteGrupos: 30000,
   };
   const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
 
@@ -25,7 +25,7 @@
   const pedir = (acao, args, opcoes = {}) => canal.pedir(acao, args, { prazo: PRAZO[acao], ...opcoes });
 
   // ---------- fundo.js ----------
-  const aoFundo = (msg) => chrome.runtime.sendMessage(msg);
+  const aoFundo = (msg) => chrome.runtime.sendMessage({ ...msg, versao: VERSAO });
 
   function base64(buffer) {
     const bytes = new Uint8Array(buffer);
@@ -201,8 +201,8 @@
           <fieldset>
             <legend>Todas as conversas</legend>
             <div class="suave" data-r="rodada"></div>
-            <details class="suave"><summary>Conversas individuais, so o que falta, na pasta [exportar] raiz</summary>
-              <p>Arquivadas incluidas; sem grupos, canais, listas e status. Uma por vez, com as opcoes de audio, imagem e anexos acima (o modo e o periodo nao valem aqui). Quem grava e o pepita-wa, na pasta do <code>[exportar] raiz</code> (padrao <code>D:\\70-WHATSAPP</code>, que o Pepita le); cada contato tem a sua pasta, e cada rodada grava nela um <code>.md</code> so com as mensagens que ainda nao tinham saido. O pepita-wa guarda ate onde cada conversa foi (so datas, nunca o texto); sem ele no ar, nada sai.</p>
+            <details class="suave"><summary>Conversas individuais, so o que falta, em C:\\WHATSAPP</summary>
+              <p>Arquivadas incluidas; sem grupos, canais, listas e status. Uma por vez, com as opcoes de audio, imagem e anexos acima (o modo e o periodo nao valem aqui). Quem grava e o pepita-wa, na pasta do <code>[exportar] raiz</code> (padrao <code>C:\\WHATSAPP</code>, que o Pepita le); cada contato tem a sua pasta, e cada rodada grava nela um <code>.md</code> so com as mensagens que ainda nao tinham saido. O pepita-wa guarda ate onde cada conversa foi (so datas, nunca o texto); sem ele no ar, nada sai.</p>
               <p>A rodada automatica faz o mesmo sozinha, sempre com transcricao, texto das imagens e anexos. Sem o Chrome aberto, o pepita-wa abre o Chrome no WhatsApp Web; sem a aba, ela abre uma; no fim fecha so o que abriu. Pula (e avisa aqui) com o WhatsApp sem login ou a transcricao parada.</p>
             </details>
             <label><input type="checkbox" data-r="rotinaLigada"><span>Rodada automatica<br><span class="suave" data-r="rotinaTexto"></span></span></label>
@@ -377,24 +377,44 @@
   }
 
   function pintarRetencao(s) {
-    const partes = [];
+    // SEG-09: nada que veio do servidor vira HTML; so textContent, e numero so se for numero.
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    const paragrafos = [];
+    const p = (...pedacos) => paragrafos.push(pedacos);
+    const codigo = (texto) => ({ codigo: texto });
     if (s.ok) {
       const c = s.cache || {};
-      const dias = s.cache_manter_dias;
-      partes.push(
-        `O pepita-wa guarda so o texto de cada audio e imagem ja processados (nunca a midia), ` +
-          `pelo sha256 do arquivo, em <code></code>: ${c.audio || 0} audio(s), ${c.imagem || 0} imagem(ns).`,
-        dias
-          ? `Cada texto e apagado ${dias} dias depois de gravado ([cache] manter_dias).`
-          : 'Fica ate voce rodar <code>uv run wa limpar-cache --sim</code>, ou defina <code>[cache] manter_dias</code> no config.toml.',
+      const dias = num(s.cache_manter_dias);
+      p(
+        'O pepita-wa guarda so o texto de cada audio e imagem ja processados (nunca a midia), pelo sha256 do arquivo, em ',
+        codigo(String(s.cache_arquivo || 'dados/cache.sqlite3')),
+        `: ${num(c.audio)} audio(s), ${num(c.imagem)} imagem(ns).`,
       );
+      if (dias) p(`Cada texto e apagado ${dias} dias depois de gravado ([cache] manter_dias).`);
+      else {
+        p(
+          'Fica ate voce rodar ', codigo('uv run wa limpar-cache --sim'), ', ou defina ',
+          codigo('[cache] manter_dias'), ' no config.toml.',
+        );
+      }
     } else {
-      partes.push('O pepita-wa guarda so o texto de cada midia processada, nunca a midia (servidor fora do ar agora).');
+      p('O pepita-wa guarda so o texto de cada midia processada, nunca a midia (servidor fora do ar agora).');
     }
-    partes.push('Nesta aba, os textos ficam na memoria ate recarregar a pagina. O .md fica so onde voce salvar.');
-    el.retencao.innerHTML = partes.map((p) => `<p>${p}</p>`).join('');
-    const arquivo = el.retencao.querySelector('code');
-    if (s.ok && arquivo) arquivo.textContent = s.cache_arquivo || 'dados/cache.sqlite3';
+    p('Nesta aba, os textos ficam na memoria ate recarregar a pagina. O .md fica so onde voce salvar.');
+    el.retencao.replaceChildren(
+      ...paragrafos.map((pedacos) => {
+        const linha = document.createElement('p');
+        for (const x of pedacos) {
+          if (typeof x === 'string') linha.append(x);
+          else {
+            const c = document.createElement('code');
+            c.textContent = x.codigo;
+            linha.append(c);
+          }
+        }
+        return linha;
+      }),
+    );
   }
 
   // ---------- exportacao ----------
@@ -629,7 +649,7 @@
   }
 
   // ---------- todas as conversas ----------
-  // Um clique, a [exportar] raiz (a pasta que o buscador le): cada conversa
+  // Um clique, a pasta C:\WHATSAPP (a raiz que o Pepita le): cada conversa
   // individual tem a sua pasta (<contato>/), e cada rodada grava nela um .md so
   // com o que ainda nao tinha saido (<contato>/<contato>_<de>_a_<ate>.md, anexos/).
   // Ate onde cada conversa foi fica no pepita-wa (GET /marcas, POST /marca), so
@@ -760,7 +780,7 @@
 
   async function lerMarcas() {
     try {
-      return await aoFundo({ tipo: 'marcas' });
+      return await aoFundo({ tipo: 'marcas', versao: VERSAO });
     } catch {
       return { erro: 'extensao recarregada: recarregue a pagina', tipo: 'fora' };
     }
@@ -833,16 +853,17 @@
       mostrarTodas(`${prefixo}lendo as marcas do pepita-wa...`);
       const lidas = await lerMarcas();
       if (!lidas?.ok) {
-        mostrarTodas(`erro: ${lidas?.erro}; sem as marcas nada sai. Rode \`uv run wa servir\` e tente de novo.`);
+        mostrarTodas(`erro: ${lidas?.erro}; sem as marcas nada sai.${lidas?.tipo === 'fora' ? ' Inicie o wa servir e tente de novo.' : ''}`);
         return null;
       }
       const marcas = new Map(Object.entries(lidas.dados.conversas || {}));
+      const importadas = lidas.dados.importadas || {};
       const pendentes = await lerPendentes();
       if (await N.reenviarPendentes(pendentes, marcas, (corpo) => aoFundo({ tipo: 'marcar', corpo }))) {
         await gravarPendentes(pendentes);
       }
       // Pastas ja tomadas por outros contatos, em qualquer rodada.
-      const usados = new Set([...marcas.values()].map((m) => m.pasta.toLowerCase()));
+      const usados = new Set([...marcas.values(), ...Object.values(importadas)].map((m) => m.pasta.toLowerCase()));
       const agora = Math.floor(Date.now() / 1000);
       mostrarTodas('listando as conversas...');
 
@@ -860,8 +881,9 @@
           const idOp = `t${Date.now()}-${i}`;
           opAtual = idOp;
           const marca = marcas.get(conversa.id);
+          const chaveImportada = N.chaveDaImportacao(importadas, conversa);
           let gravacao = null;
-          let pasta = marca?.pasta || '';
+          let pasta = marca?.pasta || importadas[chaveImportada]?.pasta || '';
           let cobertura = null;
           let salvou = false;
           const marcar = async () => {
@@ -889,9 +911,15 @@
           };
           const deps1 = {
             coletar: async () => {
+              let recibos = [];
+              if (chaveImportada) {
+                const r = await aoFundo({ tipo: 'importadas', id: chaveImportada });
+                if (!r?.ok || !Array.isArray(r.dados?.ids)) throw N.erroDe('fora', 'nao foi possivel ler os recibos da importacao');
+                recibos = r.dados.ids;
+              }
               const plano = N.planoDaConversa(marca, agora);
               const coleta = await pedir('coletarConversa', { ...plano, chatId: conversa.id }, { progresso: mostrarUma });
-              const decisao = N.decidirConversa(marca, coleta);
+              const decisao = N.decidirConversa(marca, coleta, recibos);
               ({ cobertura } = decisao);
               const { novas } = decisao;
               if (decisao.acao === 'vazio') throw N.erroDe('vazio', 'nenhuma mensagem');
@@ -1052,6 +1080,16 @@
           ok: true,
           dados: await pedir('agenteEnviar', {
             chatId: a.chatId, texto: a.texto, ultimaT: a.ultimaT, vistos: a.vistos || [], executarAte: pedido.executar_ate,
+          }),
+        };
+      }
+      if (pedido.op === 'arquivar') {
+        const a = pedido.args || {};
+        return {
+          ok: true,
+          dados: await pedir('agenteArquivar', {
+            chatId: a.chatId, nomeEsperado: a.nomeEsperado, arquivar: a.arquivar === true,
+            ultimaT: a.ultimaT, vistos: a.vistos || [], executarAte: pedido.executar_ate,
           }),
         };
       }

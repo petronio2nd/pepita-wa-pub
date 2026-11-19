@@ -86,7 +86,9 @@ class _Manipulador(BaseHTTPRequestHandler):
             tamanho = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             tamanho = -1
-        if 0 <= tamanho <= 1024 * 1024:
+        if self.headers.get("Transfer-Encoding"):
+            self._responder(codigo, corpo, fechar=True)
+        elif 0 <= tamanho <= 1024 * 1024:
             if tamanho:
                 self.rfile.read(tamanho)
             self._responder(codigo, corpo)
@@ -124,6 +126,10 @@ class _Manipulador(BaseHTTPRequestHandler):
         partes = urlsplit(self.path)
         if partes.path != "/fala":
             self._recusar(404, {"erro": "rota desconhecida"})
+            return
+        if self.headers.get("Transfer-Encoding"):
+            # SEG-07: sem ler o corpo chunked, ele viraria o proximo pedido da conexao.
+            self._responder(411, {"erro": "mande com Content-Length"}, fechar=True)
             return
 
         try:

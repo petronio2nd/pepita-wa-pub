@@ -12,14 +12,14 @@ _spec.loader.exec_module(patch)
 
 ORIGINAL = (
     'x=new Set(["ConnGetters","Constants"]);'
-    "a,(0,c.wrapModuleFunction)(l.isLidMigrated,(e,...t)=>{try{return e(...t)}catch(e){return!1}}),b"
+    "a,(0,l.wrapModuleFunction)(r.isLidMigrated,(e,...t)=>{try{return e(...t)}catch(e){return!1}}),b"
 )
 
 
 def test_aplica_uma_vez_e_e_idempotente():
     novo = patch.aplicar(ORIGINAL)
     assert '"isLidMigrated","Lid1X1MigrationUtils"' in novo
-    assert "l.isLidMigrated&&(0,c.wrapModuleFunction)(l.isLidMigrated," in novo
+    assert "r.isLidMigrated&&(0,l.wrapModuleFunction)(r.isLidMigrated," in novo
     assert patch.aplicar(novo) == novo
 
 

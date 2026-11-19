@@ -18,7 +18,7 @@ from test_servidor import MARCA, ambiente, pedir, pedir_json  # noqa: F401  (fix
                    "70-WHATSAPP foi gravada; outra pasta com esse nome herda as marcas e so recebe o novo")
 def test_marca_distingue_a_pasta_70_whatsapp(ambiente):
     servidor, _ = ambiente()
-    assert pedir_json(servidor, "/marca", {**MARCA, "raiz": "D:\\70-WHATSAPP"})[0] == 200
+    assert pedir_json(servidor, "/marca", {**MARCA, "raiz": "C:\\WHATSAPP"})[0] == 200
     _, dados = pedir(servidor, "GET", "/marcas")
     # Exportar todas em E:\70-WHATSAPP le esta mesma marca: nada nela diz que era a do D:.
     assert "raiz" in dados["conversas"][MARCA["id"]]

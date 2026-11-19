@@ -63,11 +63,11 @@ def _construir_parser() -> argparse.ArgumentParser:
     )
     p_migrar.add_argument("origem", type=Path, help="pasta do lote antigo")
     p_migrar.add_argument("--destino", type=Path, default=None,
-                          help="padrao: [exportar] raiz (D:/70-WHATSAPP)")
+                          help="padrao: [exportar] raiz (C:/WHATSAPP)")
     p_migrar.add_argument("--sim", action="store_true", help="copia e marca de verdade")
     p_nomes = sub.add_parser("nomes", help="pastas de numero que ja tem nome no WhatsApp (sem --sim, so previa)")
     p_nomes.add_argument("--sim", action="store_true", help="renomeia as pastas e troca a pasta nas marcas")
-    p_nomes.add_argument("--destino", type=Path, default=None, help="padrao: [exportar] raiz (D:/70-WHATSAPP)")
+    p_nomes.add_argument("--destino", type=Path, default=None, help="padrao: [exportar] raiz (C:/WHATSAPP)")
     return parser
 
 
@@ -215,7 +215,8 @@ def _status(cfg: Config) -> int:
     url = f"http://127.0.0.1:{cfg.servidor.porta}/status"
     dados: dict = {}
     try:
-        with urllib.request.urlopen(url, timeout=3) as resp:
+        pedido = urllib.request.Request(url, headers={"X-Pepita-WA": "1"})  # SEG-10
+        with urllib.request.urlopen(pedido, timeout=3) as resp:
             dados = json.load(resp)
         t = dados.get("transcricao") or {}
         estado = t.get("estado") or dados.get("whisper") or "em_espera"

@@ -1,7 +1,7 @@
 """`wa migrar`: leva um lote antigo do "Exportar todas" para a pasta nova e marca.
 
 O lote antigo (uma pasta qualquer, com <nome>_<datas>/<nome>_<datas>.md e anexos/,
-ou so os .md soltos) vai para D:\\70-WHATSAPP no formato novo: uma pasta por contato
+ou so os .md soltos) vai para C:\\WHATSAPP no formato novo: uma pasta por contato
 (<contato>/), com o .md e os anexos dentro. Cada conversa ganha a marca do trecho
 que o .md cobre, sem o comeco do historico (`completaAntes` falso): a primeira rodada
 nova le o historico inteiro e grava so o que ficou de fora (usuario, 2026-10-24).

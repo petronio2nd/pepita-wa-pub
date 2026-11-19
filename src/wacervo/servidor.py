@@ -9,8 +9,10 @@
                          transcreve: `transcricao.py` (Gemini pelo agy, com VAD local).
     POST /ocr         -> corpo = arquivo de imagem; {"texto", "cache", "motor"} e, se o texto
                          lido ficou abaixo de `ocr.minimo_caracteres`, {"texto": "", "curto"}
-    GET  /marcas      -> {"conversas": {id: marca}, "rodada": ultima rodada ou null}: ate
-                         onde o "Exportar todas" ja foi em cada conversa (`marcas.py`)
+    GET  /marcas?versao=V -> {"conversas": {id: marca}, "rodada", "importadas" (pastas)}.
+                         Com recibos, versao ausente/diferente recebe 409.
+    GET  /importadas?id=I -> IDs importados de uma conversa.
+                         POST /gravar e /marca exigem X-Pepita-WA-Versao com recibos.
     POST /marca       -> corpo JSON {"id", "nome", "pasta", "primeira", "ultima",
                          "completaAntes"}; junta ao trecho que ja estava e devolve a marca
     POST /rodada      -> corpo JSON com o resumo da rodada; {"ok": true}
@@ -40,7 +42,8 @@ midia pode dar certo depois. O Pepita conta com essa diferenca.
 So escuta em 127.0.0.1. Uma pagina web qualquer nao consegue usa-lo: o `Host`
 tem de ser o local (contra DNS rebinding) e, quando ha `Origin`, ele tem de ser
 de extensao (`chrome-extension://`). Programa local sem `Origin` (curl, testes)
-passa. Nao ha resposta de CORS: a extensao chama pelo service worker, que com
+passa com o `X-Pepita-WA`; nos POST /transcrever, /ocr, /gravar, /rotina, /marca, /rodada,
+/lote, /rotina/vez e /rotina/fim, so com o token de dados/agente.token em `X-Wacervo-Token` (M2, auditoria MCP de 14/11/2026). Nao ha resposta de CORS: a extensao chama pelo service worker, que com
 `host_permissions` dispensa CORS; pagina web cai no preflight.
 """
 
@@ -74,6 +77,12 @@ log = obter(__name__)
 TAMANHO_MAXIMO = 64 * 1024 * 1024  # 64 MB: audio longo cabe, video nao vem para ca.
 # Pedido recusado com corpo ate este tamanho: le e descarta antes de responder.
 DESCARTE_MAXIMO = 1024 * 1024
+CABECALHO_PROPRIO = "1"  # valor de `X-Pepita-WA`, exigido de quem vem sem `Origin` (SEG-10)
+# M2 (auditoria MCP, 14/11/2026): POST que gasta cota (transcrever, ocr), grava na raiz ou liga a
+# rodada. Sem `Origin` (programa local), exige tambem o token de dados/agente.token.
+# Residuos do M2 (15/11/2026): marcas, rodada, lote e o relogio da rodada tambem (so a extensao os chama).
+POST_COM_TOKEN = frozenset({"/transcrever", "/ocr", "/gravar", "/rotina",
+                            "/marca", "/rodada", "/lote", "/rotina/vez", "/rotina/fim"})
 # Marca e resumo de rodada sao poucos campos.
 JSON_MAXIMO = 64 * 1024
 # Resposta do `ler` com dezenas de mensagens e transcricoes.
@@ -243,17 +252,26 @@ class _Manipulador(BaseHTTPRequestHandler):
         if self.headers.get("Host", "") not in app.hosts_validos:
             self._recusar(403, {"erro": "host nao permitido"})
             return False
-        if not app.origem_permitida(self.headers.get("Origin")):
+        origem = self.headers.get("Origin")
+        if not app.origem_permitida(origem):
             self._recusar(403, {"erro": "origem nao permitida"})
             return False
+        # SEG-10: quem vem sem `Origin` (GET/<img> no-cors de uma pagina web, programa local) tem de
+        # mandar o cabecalho proprio. Pagina web nao o manda sem preflight, e o preflight da 403.
+        if origem is None and self.headers.get("X-Pepita-WA") != CABECALHO_PROPRIO:
+            self._recusar(403, {"erro": "falta o cabecalho X-Pepita-WA"})
+            return False
         return True
+
+    def _token_valido(self) -> bool:
+        token = self.headers.get("X-Wacervo-Token", "")
+        return hmac.compare_digest(token.encode(), self.server.app.token_agente.encode())
 
     def do_OPTIONS(self):  # noqa: N802 - nome exigido pelo http.server.
         self._recusar(403, {"erro": "sem CORS"})
 
     def _consulta(self, rota: str) -> dict[str, str] | None:
-        """Parametros de `rota?a=1&b=2`, ou None se o caminho e outro. So /arquivo e
-        /gravar levam consulta; as outras rotas so casam com o caminho exato."""
+        """Parametros de `rota?a=1&b=2`, ou None se o caminho e outro."""
         caminho, _, consulta = self.path.partition("?")
         if caminho != rota:
             return None
@@ -263,8 +281,18 @@ class _Manipulador(BaseHTTPRequestHandler):
         if not self._autorizado():
             return
         app = self.server.app
-        if self.path == "/marcas":
-            self._responder(200, {"conversas": app.marcas.todas(), "rodada": app.marcas.ultima_rodada()})
+        consulta = self._consulta('/marcas')
+        if consulta is not None:
+            importadas = app.marcas.importadas(incluir_ids=False)
+            if not self._versao_da_importacao(consulta.get('versao')):
+                return
+            self._responder(200, {"conversas": app.marcas.todas(), "rodada": app.marcas.ultima_rodada(),
+                                  "importadas": importadas})
+            return
+        consulta = self._consulta('/importadas')
+        if consulta is not None:
+            ident = consulta.get('id','')
+            self._responder(200, app.marcas.importadas(ident).get(ident, {'ids': []}))
             return
         if self.path == "/rotina":
             if app.rotina is None:
@@ -314,9 +342,24 @@ class _Manipulador(BaseHTTPRequestHandler):
             "grupos": _grupos_do_config(app.cfg),
         })
 
+    def _versao_da_importacao(self, versao, *, post=False):
+        if self.server.app.marcas.tem_importadas() and versao != __version__:
+            corpo={'erro': f'versoes incompativeis com recibos do iPhone: reinicie o servidor e recarregue a extensao e a aba do WhatsApp (servidor {__version__})'}
+            if post: self._recusar(409,corpo)
+            else: self._responder(409,corpo)
+            return False
+        return True
+
     def do_POST(self):  # noqa: N802
         if not self._autorizado():
             return
+        if (self.path.partition("?")[0] in POST_COM_TOKEN and self.headers.get("Origin") is None
+                and not self._token_valido()):
+            self._recusar(403, {"erro": "sem Origin de extensao, esta rota exige o token (X-Wacervo-Token)"})
+            return
+        if self.path.partition('?')[0] in ('/gravar','/marca'):
+            if not self._versao_da_importacao(self.headers.get('X-Pepita-WA-Versao'),post=True):
+                return
         if self.path.startswith("/agente/"):
             self._agente()
             return
@@ -330,6 +373,10 @@ class _Manipulador(BaseHTTPRequestHandler):
         tipo = {"/transcrever": "audio", "/ocr": "imagem"}.get(self.path)
         if tipo is None:
             self._recusar(404, {"erro": "rota desconhecida"})
+            return
+        if self.headers.get("Transfer-Encoding"):
+            # SEG-07: sem ler o corpo chunked, ele viraria o proximo pedido da conexao.
+            self._responder(411, {"erro": "mande com Content-Length"}, fechar=True)
             return
         try:
             tamanho = int(self.headers.get("Content-Length", "0"))
@@ -367,6 +414,9 @@ class _Manipulador(BaseHTTPRequestHandler):
 
 
     def _post_json(self) -> None:
+        if self.headers.get("Transfer-Encoding"):
+            self._responder(411, {"erro": "mande com Content-Length"}, fechar=True)
+            return
         try:
             tamanho = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -416,7 +466,10 @@ class _Manipulador(BaseHTTPRequestHandler):
             tamanho = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             tamanho = -1
-        if self.headers.get("Transfer-Encoding") or not 0 < tamanho <= maximo:
+        if self.headers.get("Transfer-Encoding"):
+            self._responder(411, {"erro": "mande com Content-Length"}, fechar=True)
+            return None
+        if not 0 < tamanho <= maximo:
             self._recusar(400 if tamanho <= maximo else 413, {"erro": "corpo JSON vazio ou grande demais"})
             return None
         dados = self.rfile.read(tamanho)
@@ -440,8 +493,7 @@ class _Manipulador(BaseHTTPRequestHandler):
         app = self.server.app
         origem = self.headers.get("Origin")
         if self.path == "/agente/pedir":
-            token = self.headers.get("X-Wacervo-Token", "")
-            if origem is not None or not hmac.compare_digest(token.encode(), app.token_agente.encode()):
+            if origem is not None or not self._token_valido():
                 self._recusar(403, {"erro": "so o wa mcp, com o token"})
                 return
             corpo = self._ler_corpo_json(JSON_MAXIMO)

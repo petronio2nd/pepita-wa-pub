@@ -95,7 +95,7 @@ class ConfigCache:
 class ConfigExportar:
     # Raiz do "Exportar todas" (a que o Pepita le). Desde a 0.16.0 quem grava e o
     # `wa servir`, sempre dentro dela; a pasta tem que existir.
-    raiz: str = "D:/70-WHATSAPP"
+    raiz: str = "C:/WHATSAPP"
 
 
 @dataclass(frozen=True)
@@ -203,19 +203,33 @@ def _termos(secao: dict, nome: str, campo: str, padrao: tuple[str, ...]) -> tupl
     return tuple(v.strip() for v in valor)
 
 
-def _ids_de_grupos(secao: dict) -> tuple[str, ...]:
+def _ids_de_grupos(secao: dict, onde: str = "config.toml: [grupos]") -> tuple[str, ...]:
     valor = secao.get("ids", [])
     if not isinstance(valor, list) or not all(isinstance(v, str) for v in valor):
-        raise ErroDeConfig("config.toml: [grupos] ids precisa ser uma lista de textos")
+        raise ErroDeConfig(f"{onde} ids precisa ser uma lista de textos")
     ids: list[str] = []
     for v in valor:
         # Aceita o arroba largo (U+FF20) que aparece ao copiar de alguns textos.
         v = v.strip().replace("＠", "@")
         if not v.endswith("@g.us") or len(v) <= len("@g.us") or " " in v:
-            raise ErroDeConfig(f"config.toml: [grupos] ids: \"{v}\" nao e um id de grupo (...@g.us)")
+            raise ErroDeConfig(f"{onde} ids: \"{v}\" nao e um id de grupo (...@g.us)")
         if v not in ids:
             ids.append(v)
     return tuple(ids)
+
+
+def _grupos(secao: dict) -> ConfigGrupos:
+    """Lista local mais a do `arquivo` comum, que o Syncthing leva entre os PCs (usuario, 2026-11-18).
+    Arquivo que ainda nao chegou nao derruba nada: valem os ids locais."""
+    ids = list(_ids_de_grupos(secao))
+    arquivo = _texto(secao, "grupos", "arquivo", "", vazio=True).strip()
+    if arquivo and Path(arquivo).is_file():
+        try:
+            dados = tomllib.loads(Path(arquivo).read_text(encoding="utf-8"))
+        except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as erro:
+            raise ErroDeConfig(f"{arquivo} invalido: {erro}") from erro
+        ids += [i for i in _ids_de_grupos(dados, arquivo) if i not in ids]
+    return ConfigGrupos(ids=tuple(ids))
 
 
 def _gemini(t: dict) -> ConfigGemini:
@@ -314,5 +328,5 @@ def carregar(caminho: Path | None = None, raiz: Path | None = None) -> Config:
             chrome=_texto(r, "rotina", "chrome", padrao_r.chrome, vazio=True).strip(),
             perfil=_texto(r, "rotina", "perfil", padrao_r.perfil, vazio=True).strip(),
         ),
-        grupos=ConfigGrupos(ids=_ids_de_grupos(g)),
+        grupos=_grupos(g),
     )

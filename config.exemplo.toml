@@ -67,6 +67,9 @@ raiz = "C:/WHATSAPP"
 # exportam (0.21.0). Fora desta lista o grupo some do MCP, nunca recebe envio e nao e
 # exportado. `uv run python -m wacervo.cli grupos` lista todos com o id; o nome fica so
 # como comentario. Vale na hora para o MCP; a extensao pega na proxima rodada.
+# `arquivo` (opcional, desde 18/11/2026): um .toml com `ids = [...]` numa pasta sincronizada entre os
+# PCs; os ids dele se somam aos daqui. Arquivo que ainda nao chegou: valem so os daqui.
+# arquivo = "C:/caminho/grupos-whatsapp.toml"
 ids = [
   # "120363000000000000@g.us",  # Familia
 ]

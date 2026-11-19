@@ -168,14 +168,24 @@
     return /^[a-z0-9]{2,5}$/.test(sub) ? sub : PADRAO_EXTENSAO[m.tipo];
   }
 
+  // SEG-08: extensoes que o Windows executa ou abre como atalho; ganham `.bin` no fim.
+  const EXTENSOES_DE_RISCO = new Set([
+    'exe', 'com', 'scr', 'bat', 'cmd', 'ps1', 'vbs', 'js', 'jse', 'wsf', 'hta', 'lnk', 'url', 'msi', 'msp',
+    'reg', 'cpl', 'jar', 'vbe', 'wsh', 'pif', 'scf', 'msc', 'chm', 'inf', 'appx', 'msix', 'appxbundle', 'dll', 'sys',
+    'ade', 'adp', 'mde', 'mst', 'ps2', 'psm1', 'gadget', 'application', 'jnlp', 'docm', 'xlsm', 'pptm',
+  ]);
+
   // O que o Windows nao aceita em nome de arquivo sai; espacos repetidos viram um.
+  // Controles de direcao Unicode (U+202E e cia., que invertem a direcao do nome) saem tambem; ZWJ e ZWNJ ficam.
   function nomeLimpo(nome) {
     return String(nome || '')
+      .replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
       .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/[. ]+$/, '')
       .slice(0, 80)
+      .replace(/[. ]+$/, '')
       .trim();
   }
 
@@ -204,6 +214,8 @@
       } else {
         base = m.tipo === 'image' ? 'imagem' : m.tipo === 'video' ? (m.gif ? 'gif' : 'video') : 'documento';
       }
+      // SEG-08: extensao executavel do remetente nao vai para a pasta do projeto como esta.
+      if (EXTENSOES_DE_RISCO.has(ext.toLowerCase())) ext = `${ext}.bin`;
       let nome = `${quando}_${base}.${ext}`;
       for (let n = 2; usados.has(nome.toLowerCase()); n++) nome = `${quando}_${base}-${n}.${ext}`;
       usados.add(nome.toLowerCase());
@@ -502,7 +514,7 @@
   }
 
   // ---------- incremental ----------
-  // O "Exportar todas" grava na [exportar] raiz (a pasta que o buscador le) e pula o
+  // O "Exportar todas" grava em C:\WHATSAPP (a raiz que o Pepita le) e pula o
   // que ja foi: o servidor guarda, por conversa, o trecho continuo ja exportado
   // (`primeira`..`ultima`, em segundos) e se o historico ja foi lido ate o comeco
   // (`completaAntes`). Cada rodada le o que falta e grava so as mensagens novas.
@@ -513,6 +525,14 @@
   function planoDaConversa(marca, agora) {
     const inicio = marca?.completaAntes ? marca.ultima + 1 : 0;
     return { modo: 'periodo', inicio, fim: agora };
+  }
+
+  function chaveDaImportacao(importadas, conversa) {
+    if (importadas[conversa.id]) return conversa.id;
+    if (conversa.grupo) return null;
+    const tel = String(conversa.telefone || '').replace(/\D/g, '');
+    if (!tel) return null;
+    return [`${tel}@s.whatsapp.net`, `${tel}@c.us`].find((id) => importadas[id]) || null;
   }
 
   const novasDaConversa = (marca, mensagens) =>
@@ -539,10 +559,16 @@
   // mensagem), 'sem_novidade' (marca de novo se `cobertura`: o comeco do historico pode
   // ter acabado de ser lido), 'limite' (nada a gravar: abriria um buraco) ou
   // 'exportar' (grava `novas` e so depois marca `cobertura`).
-  function decidirConversa(marca, coleta) {
+  function decidirConversa(marca, coleta, importadas = []) {
     const cobertura = coberturaNova(marca, coleta);
-    const novas = novasDaConversa(marca, coleta.mensagens || []);
-    if (!novas.length) return { acao: marca ? 'sem_novidade' : 'vazio', cobertura, novas };
+    const recibos = new Set(importadas);
+    const novas = novasDaConversa(marca, coleta.mensagens || []).filter((m) => {
+      // MsgKey serializado: fromMe_chat_stanza[_participante]. A pagina tambem
+      // manda o stanza bruto; nao compara texto nem minuto para mensagens novas.
+      const id = m.stanzaId || /^(?:true|false)_[^_]+_([^_]+)(?:_|$)/.exec(m.id || '')?.[1];
+      return !id || !recibos.has(id);
+    });
+    if (!novas.length) return { acao: marca || (importadas.length && cobertura) ? 'sem_novidade' : 'vazio', cobertura, novas };
     if (!cobertura) return { acao: 'limite', cobertura, novas };
     return { acao: 'exportar', cobertura, novas };
   }
@@ -629,7 +655,7 @@
 
   // ---------- gravacao pelo wa servir e rodada automatica (0.16.0) ----------
   // O "Exportar todas" grava pelo `wa servir` (POST /gravar), dentro da raiz que
-  // ele tem no config ([exportar] raiz): nem o clique nem a rodada
+  // ele tem no config ([exportar] raiz, C:\WHATSAPP): nem o clique nem a rodada
   // automatica usam mais o seletor de pasta. A rodada automatica sai do relogio
   // do servidor a cada 30 min; o fundo.js acha ou abre a aba, e a ponte roda.
 
@@ -917,14 +943,62 @@
   const IDS_DE_CONVERSA = /@(c\.us|lid|g\.us|s\.whatsapp\.net)$/;
   const semAcento = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-  // lista: [{id, nome, grupo, eu}]. alvo: id, "eu" ou parte do nome (sem acento e
-  // sem caixa). Nome igual vence parte do nome. Devolve {conversa} | {ambiguo} | {erro}.
+  // Formas de um telefone so com digitos, para casar com e sem o 55 e com e sem o
+  // 9 do celular brasileiro (o WhatsApp guarda muitos celulares antigos sem o 9).
+  function formasDoTelefone(digitos) {
+    const formas = new Set([digitos]);
+    let n = digitos;
+    if (n.startsWith('55') && (n.length === 12 || n.length === 13)) n = n.slice(2);
+    formas.add(n);
+    if (n.length === 11 && n[2] === '9') formas.add(n.slice(0, 2) + n.slice(3));
+    if (n.length === 10) formas.add(n.slice(0, 2) + '9' + n.slice(2));
+    return [...formas];
+  }
+
+  // `alvo` parece telefone (so +, digitos, espaco, ponto, hifen e parenteses, 8+ digitos)?
+  // Devolve os digitos ou ''.
+  function digitosDoTelefone(alvo) {
+    const a = String(alvo || '').trim();
+    if (!/^[+\d\s().-]+$/.test(a)) return '';
+    const d = a.replace(/\D/g, '');
+    return d.length >= 8 ? d : '';
+  }
+
+  // Conversas individuais cujo `telefone` termina nos digitos pedidos (8+ digitos).
+  function porTelefone(lista, digitos) {
+    const pedidas = formasDoTelefone(digitos).filter((f) => f.length >= 8);
+    return (lista || []).filter((c) => {
+      const t = String(c.telefone || '').replace(/\D/g, '');
+      if (!t || c.grupo) return false;
+      return formasDoTelefone(t).some((f) => pedidas.some((p) => f.endsWith(p)));
+    });
+  }
+
+  // lista: [{id, nome, grupo, eu, telefone}]. alvo: id, "eu", telefone (com ou sem o 55,
+  // com ou sem o 9) ou parte do nome (sem acento e sem caixa). Nome igual vence parte do
+  // nome. Devolve {conversa} | {ambiguo} | {erro}.
   function resolverConversa(lista, alvo, { limite = 15 } = {}) {
     const a = String(alvo || '').trim();
     if (!a) return { erro: 'diga qual conversa' };
+    const resumo = ({ id, nome, grupo }) => ({ id, nome, grupo: !!grupo });
     if (IDS_DE_CONVERSA.test(a)) {
       const achada = (lista || []).find((c) => c.id === a);
-      return achada ? { conversa: achada } : { erro: `nenhuma conversa com o id ${a}` };
+      if (achada) return { conversa: achada };
+      // Id c.us de quem o WhatsApp so conhece pelo @lid: tenta pelo telefone do id.
+      const [usuario, servidor] = a.split('@');
+      if (servidor === 'c.us' || servidor === 's.whatsapp.net') {
+        const pelo = porTelefone(lista, usuario.replace(/\D/g, ''));
+        if (pelo.length === 1) return { conversa: pelo[0] };
+        if (pelo.length > 1) return { ambiguo: pelo.slice(0, limite).map(resumo) };
+      }
+      return { erro: `nenhuma conversa com o id ${a}` };
+    }
+    const digitos = digitosDoTelefone(a);
+    if (digitos) {
+      const pelo = porTelefone(lista, digitos);
+      if (pelo.length === 1) return { conversa: pelo[0] };
+      if (pelo.length > 1) return { ambiguo: pelo.slice(0, limite).map(resumo) };
+      // Sem telefone que case, segue para o nome: contato nao salvo tem o numero como nome.
     }
     if (semAcento(a) === 'eu') {
       const eu = (lista || []).filter((c) => c.eu);
@@ -971,6 +1045,19 @@
       return { ok: false, tipo: 'sem_aba', erro: 'a aba do WhatsApp nao tem o pepita-wa: recarregue a aba' };
     }
     return { ok: false, tipo: 'sem_resposta', erro: `a aba do WhatsApp nao respondeu (${erro?.prazo ? 'prazo' : msg.slice(0, 120)})` };
+  }
+
+  // Arquivar (0.28.0): o que fazer antes de chamar o WhatsApp. Nome atual diferente do
+  // aprovado recusa; para arquivar, mensagem do contato depois da leitura tambem (arquivar
+  // esconderia o que ainda nao esta em dia); ja no estado pedido nao chama nada.
+  // Devolve {recusa} | {resultado: 'nova' | 'ja_estava'} | {agir: true}.
+  function antesDeArquivar({ nomeAtual, nomeEsperado, arquivada, arquivar, msgs, leitura, completa = false } = {}) {
+    if (!nomeEsperado || nomeAtual !== nomeEsperado) {
+      return { recusa: `o nome atual da conversa e "${nomeAtual}", nao "${nomeEsperado}"` };
+    }
+    if (!!arquivada === !!arquivar) return { resultado: 'ja_estava' };
+    if (arquivar && novaDepoisDaLeitura(msgs, leitura, { completa })) return { resultado: 'nova' };
+    return { agir: true };
   }
 
   function confirmarEnvio(msgs, { idEnviado = '', texto = '', antes = [] } = {}) {
@@ -1070,14 +1157,14 @@
   }
 
   const api = {
-    resolverConversa, novaDepoisDaLeitura, confirmarEnvio, classificarFalhaNaAba, transcreverParaOAgente,
+    resolverConversa, digitosDoTelefone, formasDoTelefone, novaDepoisDaLeitura, confirmarEnvio, classificarFalhaNaAba, transcreverParaOAgente,
     nomeDaConversa, erroDe, criarCanal, varrerPeriodo, criarOperacao, alvosDe, exportar, descreverResumo, criarFila,
     compararVersoes, avisoDeVersao, nomesDosAnexos,
     ehConversaIndividual, ehGrupoEscolhido, selecionarConversas, nomeUnico, exportarTodas, descreverResumoTodas,
-    ancoraNaBarra, PASTA_TODAS, planoDaConversa, novasDaConversa, coberturaNova, decidirConversa, descreverRodada,
+    ancoraNaBarra, PASTA_TODAS, planoDaConversa, chaveDaImportacao, novasDaConversa, coberturaNova, decidirConversa, descreverRodada,
     partesDoArquivo, motivoParaNaoExportarTodas, decidirTrava, renovarTrava, oQueFechar, resultadoDaRodada,
     descreverRotina,
-    marcaComPendente, reenviarPendentes, criarAgendadorCaptura,
+    marcaComPendente, reenviarPendentes, criarAgendadorCaptura, antesDeArquivar,
   };
   if (typeof module !== 'undefined') module.exports = api;
   else globalThis.wacervoNucleo = api;

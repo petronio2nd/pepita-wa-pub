@@ -28,8 +28,9 @@ TROCAS = [
         '"ConnGetters","Constants","isLidMigrated","Lid1X1MigrationUtils"',
     ),
     (
-        "(0,c.wrapModuleFunction)(l.isLidMigrated,",
-        "l.isLidMigrated&&(0,c.wrapModuleFunction)(l.isLidMigrated,",
+        # wa-js 4.8.2 (18/11/2026); na 4.7.2 as variaveis eram c e l.
+        "(0,l.wrapModuleFunction)(r.isLidMigrated,",
+        "r.isLidMigrated&&(0,l.wrapModuleFunction)(r.isLidMigrated,",
     ),
 ]
 

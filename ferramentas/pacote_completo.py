@@ -22,10 +22,10 @@ RAIZ = Path(__file__).resolve().parent.parent
 
 LEVA = (
     "extensao/", "src/", "tests/", "pyproject.toml", "uv.lock", "config.exemplo.toml",
-    "README.md", ".gitignore", "docs/instalar-outro-computador.md",
+    "README.md", ".gitignore", "docs/instalar-outro-computador.md", "docs/arquitetura.md",
     "ferramentas/servir-oculto.vbs", "ferramentas/parar-servidor.cmd",
     # So porque os testes os leem (test_transcricao, test_pacote_so_exportar, test_patch_wajs).
-    "servico-whisper/servico.py", "ferramentas/pacote_so_exportar.py", "ferramentas/patch_wajs.py",
+    "servico-whisper/servico.py", "servico-whisper/compose.yml", "ferramentas/pacote_so_exportar.py", "ferramentas/patch_wajs.py",
 )
 # Dentro do que vai, o que nao serve fora da maquina do usuario.
 FORA = ("tests/test_avaliacao_transcricao.py", "extensao/testes/", "extensao/icones/gerar.py")

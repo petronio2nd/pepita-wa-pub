@@ -43,6 +43,32 @@ def test_config_le_ids_e_aceita_arroba_largo(tmp_path):
     assert carregar(raiz=tmp_path / "nada").grupos.ids == ()
 
 
+def test_config_soma_ids_do_arquivo_comum(tmp_path):
+    # Lista sincronizada entre os PCs (Syncthing) somada a lista local (usuario, 2026-11-18).
+    comum = tmp_path / "comum.toml"
+    comum.write_text(f'ids = ["{GB}", "{GA}"]\n', encoding="utf-8")
+    (tmp_path / "config.toml").write_text(
+        f'[grupos]\nids = ["{GA}"]\narquivo = "{comum.as_posix()}"\n', encoding="utf-8")
+    assert carregar(raiz=tmp_path).grupos.ids == (GA, GB)
+
+
+def test_config_sem_o_arquivo_comum_fica_com_a_lista_local(tmp_path):
+    (tmp_path / "config.toml").write_text(
+        f'[grupos]\nids = ["{GA}"]\narquivo = "{(tmp_path / "falta.toml").as_posix()}"\n',
+        encoding="utf-8")
+    assert carregar(raiz=tmp_path).grupos.ids == (GA,)
+
+
+@pytest.mark.parametrize("conteudo", ['ids = ["556290000000@c.us"]\n', "ids = [\n", 'ids = "x@g.us"\n'])
+def test_config_recusa_arquivo_comum_invalido(tmp_path, conteudo):
+    comum = tmp_path / "comum.toml"
+    comum.write_text(conteudo, encoding="utf-8")
+    (tmp_path / "config.toml").write_text(
+        f'[grupos]\narquivo = "{comum.as_posix()}"\n', encoding="utf-8")
+    with pytest.raises(ErroDeConfig):
+        carregar(raiz=tmp_path)
+
+
 @pytest.mark.parametrize("ids", ['["556290000000@c.us"]', '["@g.us"]', '"x@g.us"', '[1]'])
 def test_config_recusa_id_que_nao_e_de_grupo(tmp_path, ids):
     (tmp_path / "config.toml").write_text(f"[grupos]\nids = {ids}\n", encoding="utf-8")

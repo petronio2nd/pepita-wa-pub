@@ -1,5 +1,5 @@
 # Servico de transcricao do pepita-wa na distro ubuntu-dev. Subir ou atualizar:
-#   cd /caminho/do/pepita-wa-pub/servico-whisper && docker compose up -d --build
+#   cd /caminho/do/pepita-wa/servico-whisper && docker compose up -d --build
 # Volta sozinho com a distro (restart: unless-stopped; o docker.service sobe com ela).
 name: pepita-wa
 services:
@@ -16,3 +16,17 @@ services:
     # porta da faixa dinamica pode estar ocupada nesse instante.
     ports:
       - "127.0.0.1:18765:18765"
+    # SEG-04: o servico decodifica midia de qualquer contato (ffmpeg do PyAV), entao roda com o
+    # minimo: sistema de arquivos so de leitura (so /tmp grava, em memoria), sem capabilities,
+    # sem ganhar privilegio e com teto de memoria e de processos. Ficou de fora a rede `internal`
+    # (sem saida): ela impede a publicacao da porta em 127.0.0.1; o servico nao baixa nada, mas
+    # fechar a saida exigiria outra forma de expor a porta.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    pids_limit: 128

@@ -340,7 +340,28 @@ MARCA = {"id": "556290000000@c.us", "nome": "Renata Silva", "pasta": "renata-sil
 
 def test_marcas_comeca_vazio(ambiente):
     servidor, _ = ambiente()
-    assert pedir(servidor, "GET", "/marcas") == (200, {"conversas": {}, "rodada": None})
+    assert pedir(servidor, "GET", "/marcas") == (200, {"conversas": {}, "rodada": None, "importadas": {}})
+
+
+def test_importadas_chegam_a_extensao_sem_inventar_datas(ambiente):
+    servidor, _ = ambiente()
+    servidor.app.marcas.registrar_importadas(['199999999999999@lid'], ['FICTICIO1'],
+                                           'renata', 'iphone.md', 'a' * 64)
+    assert pedir(servidor, 'GET', '/marcas')[0] == 409
+    assert pedir(servidor, 'GET', '/marcas?versao=0.28.0')[0] == 409
+    assert pedir(servidor, 'GET', '/marcas?versao=')[0] == 409
+    from wacervo import __version__
+    codigo, dados = pedir(servidor, 'GET', '/marcas?versao='+__version__)
+    assert codigo == 200
+    assert dados['conversas'] == {}
+    assert dados['importadas'] == {'199999999999999@lid': {'pasta': 'renata'}}
+    codigo, recibos = pedir(servidor, 'GET', '/importadas?id=199999999999999%40lid')
+    assert codigo == 200
+    assert recibos['ids'] == ['FICTICIO1']
+    assert pedir_json(servidor, '/marca', MARCA)[0] == 409
+    corpo=json.dumps(MARCA).encode('utf-8')
+    assert pedir(servidor,'POST','/marca',corpo,{'Content-Type':'application/json','X-Pepita-WA-Versao':__version__})[0]==200
+    assert pedir(servidor,'POST','/gravar?caminho=renata/x.md&lote=t1',b'x')[0]==409
 
 
 def test_marca_junta_o_trecho_e_guarda_a_pasta_da_primeira_vez(ambiente):

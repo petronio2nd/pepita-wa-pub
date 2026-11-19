@@ -33,6 +33,29 @@ test('resolverConversa: "eu" sem a conversa do usuario nunca cai na busca por no
   assert.match(resolverConversa(semEu, 'Eu').erro, /conversa do usuario/);
 });
 
+test('resolverConversa: telefone casa com e sem 55, com e sem o 9, e pelo id c.us de um @lid', () => {
+  const lista = [
+    { id: '211111111111111@lid', nome: 'caio', grupo: false, telefone: '556294670000' },
+    { id: '556291234567@c.us', nome: 'Bruna', grupo: false, telefone: '556291234567' },
+    { id: '222222222222222@lid', nome: '+55 62 9107-2016', grupo: false, telefone: '' },
+    { id: '120363000000000000@g.us', nome: 'Grupo 9467', grupo: true, telefone: '' },
+  ];
+  for (const alvo of ['+55 62 9467-0000', '+55 62 99467-0000', '62994670000', '9467-0000', '(62) 9 9467-0000']) {
+    assert.equal(resolverConversa(lista, alvo).conversa.nome, 'caio', alvo);
+  }
+  // Id c.us que o WhatsApp so conhece pelo @lid.
+  assert.equal(resolverConversa(lista, '5562994670000@c.us').conversa.nome, 'caio');
+  assert.match(resolverConversa(lista, '5562900000000@c.us').erro, /nenhuma conversa com o id/);
+  // Contato nao salvo sem telefone no contato: cai na busca pelo nome, que e o numero.
+  assert.equal(resolverConversa(lista, '+55 62 9107-2016').conversa.id, '222222222222222@lid');
+  // Poucos digitos nao vira busca por telefone, e grupo nunca casa por telefone.
+  assert.equal(resolverConversa(lista, '9467').conversa.grupo, true);
+  assert.match(resolverConversa(lista, '+55 11 98888-7777').erro, /nenhuma conversa com/);
+  // Dois contatos com o mesmo fim: ambiguo, nunca escolhe sozinho.
+  const dois = [...lista, { id: '333@lid', nome: 'Outro', grupo: false, telefone: '551194670000' }];
+  assert.equal(resolverConversa(dois, '9467-0000').ambiguo.length, 2);
+});
+
 test('novaDepoisDaLeitura: olha todas as ultimas, nao so a ultima', () => {
   const leitura = { ultimaT: 100, vistos: ['m1', 'm2'] };
   const lidas = [{ id: 'm1', t: 90, eu: false }, { id: 'm2', t: 100, eu: false }];
@@ -103,4 +126,24 @@ test('transcreverParaOAgente: texto vazio (sem fala) e resultado, nao pendencia'
   const msgs = [{ id: 'a1', tipo: 'ptt' }];
   await transcreverParaOAgente(msgs, async () => ({ texto: '' }), { prazoMs: 1000 });
   assert.deepEqual(msgs[0].transcricao, { texto: '' });
+});
+
+test('antesDeArquivar (0.28.0): nome, mensagem nova, ja no estado e agir', () => {
+  const { antesDeArquivar } = require('../nucleo.js');
+  const leitura = { ultimaT: 100, vistos: ['a'] };
+  const base = { nomeAtual: 'Renata Silva', nomeEsperado: 'Renata Silva', arquivada: false, arquivar: true, leitura, completa: true };
+  const lidas = [{ id: 'a', t: 100, eu: false }];
+  assert.deepEqual(antesDeArquivar({ ...base, msgs: lidas }), { agir: true });
+  assert.match(antesDeArquivar({ ...base, nomeAtual: 'Carla Mendes', msgs: lidas }).recusa, /Carla Mendes/);
+  assert.match(antesDeArquivar({ ...base, nomeEsperado: '', msgs: lidas }).recusa, /nome atual/);
+  const nova = lidas.concat({ id: 'b', t: 160, eu: false });
+  assert.deepEqual(antesDeArquivar({ ...base, msgs: nova }), { resultado: 'nova' });
+  // Mensagem minha depois da leitura nao impede.
+  assert.deepEqual(antesDeArquivar({ ...base, msgs: lidas.concat({ id: 'c', t: 170, eu: true }) }), { agir: true });
+  assert.deepEqual(antesDeArquivar({ ...base, arquivada: true, msgs: lidas }), { resultado: 'ja_estava' });
+  // Ja arquivada com mensagem nova: diz que ja estava, nunca que ficou a vista.
+  assert.deepEqual(antesDeArquivar({ ...base, arquivada: true, msgs: nova }), { resultado: 'ja_estava' });
+  // Desarquivar nao olha mensagem nova (so devolve a conversa a vista).
+  assert.deepEqual(antesDeArquivar({ ...base, arquivada: true, arquivar: false, msgs: nova }), { agir: true });
+  assert.deepEqual(antesDeArquivar({ ...base, arquivada: false, arquivar: false, msgs: [] }), { resultado: 'ja_estava' });
 });

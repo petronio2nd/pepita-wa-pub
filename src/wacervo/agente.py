@@ -20,7 +20,10 @@ So biblioteca padrao: o `wa mcp` importa `ler_token` daqui.
 
 from __future__ import annotations
 
+import csv
+import os
 import secrets
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -37,6 +40,7 @@ OPERACOES: dict[str, tuple[float, float, float]] = {
     "listar": (10, 30, 15),
     "ler": (10, 150, 15),
     "enviar": (10, 45, 15),
+    "arquivar": (10, 45, 15),  # 0.28.0
     "grupos": (10, 30, 15),  # todos os grupos, para o `wa grupos` (nao passa pelo MCP dos agentes)
 }
 # A extensao pergunta a cada 20 s no maximo; sem pergunta ha este tanto, esta desligada.
@@ -177,13 +181,40 @@ class FilaDoAgente:
             return True
 
 
+def _so_o_usuario(caminho: Path) -> None:
+    """Deixa o arquivo legivel so pelo usuario atual (M2, auditoria MCP de 14/11/2026): a pasta do
+    projeto herda "Usuarios autenticados: Modificar" da raiz do D:. Falha vira aviso no log, sem
+    impedir o servidor de subir (o token continua valendo; a ACL fica para o icacls manual)."""
+    if os.name != "nt":
+        os.chmod(caminho, 0o600)
+        return
+    sem_janela = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    try:
+        # O dono e o do processo (SID pelo whoami), nunca LOGNAME/USER, que o shell pode trocar.
+        quem = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
+                              timeout=30, creationflags=sem_janela)
+        campos = next(csv.reader([quem.stdout.strip()]), [])
+        sid = campos[-1] if quem.returncode == 0 and campos else ""
+        ok = sid.startswith("S-1-") and subprocess.run(
+            ["icacls", str(caminho), "/inheritance:r", "/grant:r", f"*{sid}:F"],
+            capture_output=True, timeout=30, creationflags=sem_janela).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    if not ok:
+        log.warning("dados/agente.token sem ACL restrita (icacls falhou); rode o icacls do M2 a mao")
+
+
 def criar_token(caminho: Path) -> str:
-    """Token que o MCP manda em `X-Wacervo-Token`. Criado pelo `wa servir` se faltar."""
+    """Token que o MCP manda em `X-Wacervo-Token`. Criado pelo `wa servir` se faltar, com a ACL
+    restrita antes de o segredo entrar no arquivo."""
     if caminho.exists():
         token = caminho.read_text(encoding="utf-8").strip()
         if len(token) >= 32:
             return token
+        caminho.unlink()
     caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.touch(exist_ok=False)
+    _so_o_usuario(caminho)
     token = secrets.token_urlsafe(32)
     caminho.write_text(token, encoding="utf-8")
     return token

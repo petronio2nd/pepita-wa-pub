@@ -1,6 +1,6 @@
 // Mundo MAIN do web.whatsapp.com: unico lugar com acesso ao WPP (wa-js).
 // Responde pedidos da ponte.js. Desde a 0.19.0 tambem atende o agente (`wa mcp`):
-// listar, ler e enviar, com as travas da pagina no nucleo.js.
+// listar, ler, enviar e arquivar (0.28.0), com as travas da pagina no nucleo.js.
 (() => {
   'use strict';
 
@@ -53,6 +53,7 @@
     const tipo = msg.type;
     const o = {
       id: serial(msg.id),
+      stanzaId: typeof msg.id?.id === 'string' ? msg.id.id : '',
       t: msg.t,
       eu: !!msg.id?.fromMe,
       autor: autorDe(msg),
@@ -71,6 +72,9 @@
       o.citado = {
         autor: msg.quotedParticipant ? nome(msg.quotedParticipant) : '',
         texto: resumoCitado(msg.quotedMsg),
+        // INS-12: id e hora da citada, para o servidor dizer de quando ela e (qual imagem foi citada).
+        id: typeof msg.quotedStanzaID === 'string' ? msg.quotedStanzaID : '',
+        t: Number(msg.quotedMsg?.t) || 0,
       };
     }
 
@@ -279,6 +283,7 @@
           id,
           nome: info.nome,
           origemNome: info.origemNome,
+          telefone: info.telefone,
           t: Number(c.t) || 0,
           arquivada: !!c.archive,
           servidor,
@@ -364,7 +369,7 @@
         const info = infoChat(c);
         return {
           id: info.id, nome: info.nome, grupo: info.grupo, naoLidas: Math.max(0, Number(c.unreadCount) || 0),
-          t: Number(c.t) || 0, arquivada: !!c.archive,
+          t: Number(c.t) || 0, arquivada: !!c.archive, telefone: info.telefone,
         };
       });
     },
@@ -385,7 +390,9 @@
       const liberados = new Set(Array.isArray(grupos) ? grupos : []);
       const lista = (await WPP.chat.list()).map((c) => {
         const info = infoChat(c);
-        return { id: info.id, nome: info.nome, grupo: info.grupo, eu: !info.grupo && ehEu(info.id, meus) };
+        return {
+          id: info.id, nome: info.nome, grupo: info.grupo, eu: !info.grupo && ehEu(info.id, meus), telefone: info.telefone,
+        };
       }).filter((c) => !c.grupo || liberados.has(c.id));
       const r = wacervoNucleo.resolverConversa(lista, alvo);
       if (r.ambiguo) return { ambiguo: r.ambiguo };
@@ -433,6 +440,45 @@
           } catch {}
           return { resultado: 'enviado', ack: ack ?? null };
         }
+      }
+      return { resultado: 'nao_confirmado' };
+    },
+
+    // Arquivar ou desarquivar (0.28.0). Como o envio: so rejeita antes de chamar o WhatsApp;
+    // dali em diante devolve o resultado. `chatId` e sempre o da leitura (o MCP nunca manda nome).
+    async agenteArquivar({ chatId, nomeEsperado, arquivar, ultimaT, vistos, executarAte }) {
+      const chat = WPP.chat.get(chatId);
+      if (!chat) throw erro('recusado', 'o WhatsApp nao tem essa conversa');
+      const quer = arquivar === true;
+      let msgs = [];
+      let completa = true;
+      if (quer) {
+        const BUSCA = 100;
+        const brutas = (await WPP.chat.getMessages(chatId, { count: BUSCA })) || [];
+        msgs = limpar(brutas).map((m) => ({ id: serial(m.id), t: m.t, eu: !!m.id?.fromMe }));
+        completa = brutas.length < BUSCA;
+      }
+      const atual = WPP.chat.get(chatId) || chat;
+      const d = wacervoNucleo.antesDeArquivar({
+        nomeAtual: infoChat(atual).nome, nomeEsperado, arquivada: !!atual.archive, arquivar: quer,
+        msgs, leitura: { ultimaT, vistos: vistos || [] }, completa,
+      });
+      if (d.recusa) throw erro('recusado', d.recusa);
+      if (d.resultado) return { resultado: d.resultado };
+      // O prazo e conferido aqui, logo antes de agir, depois das esperas.
+      if (!(Number(executarAte) > Date.now())) throw erro('expirado', 'o pedido passou do prazo; nada mudou');
+      let falha = '';
+      try {
+        await WPP.chat.archive(chatId, quer);
+      } catch (e) {
+        falha = String(e?.message || e);
+      }
+      // Erro do WhatsApp nunca vira "feito", mesmo com a marca local trocada (o wa-js troca a
+      // marca antes de o servidor confirmar). Sem erro, a marca local e a melhor prova que ha.
+      if (falha) return { resultado: 'nao_confirmado', erro: falha.slice(0, 200) };
+      for (let i = 0; i < 4; i++) {
+        await pausa(1000);
+        if (!!WPP.chat.get(chatId)?.archive === quer) return { resultado: 'feito' };
       }
       return { resultado: 'nao_confirmado' };
     },

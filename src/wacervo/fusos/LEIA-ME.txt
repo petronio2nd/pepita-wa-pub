@@ -1,0 +1,5 @@
+America_Sao_Paulo.tzif: arquivo TZif da base IANA, copiado de
+/usr/share/zoneinfo/America/Sao_Paulo do ubuntu-lab em 18/11/2026 (tzdata 2026e).
+Usado apenas quando zoneinfo nao encontra dados do sistema (Windows sem tzdata).
+A base IANA e de dominio publico: https://www.iana.org/time-zones
+Preserva transicoes historicas, inclusive horario de verao; nao fixa UTC-3.
