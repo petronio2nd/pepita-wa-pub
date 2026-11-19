@@ -165,6 +165,32 @@ automática em dobro), e o servidor recusa a nova (`403 origem nao permitida`) e
 Se você só trocou os arquivos **na mesma pasta**, não remova nada: em `chrome://extensions`,
 clique em recarregar na pepita-wa.
 
+## Duas contas do WhatsApp no mesmo computador
+
+O WhatsApp Web abre uma conta por perfil do Chrome, e cada instalação do pepita-wa serve a
+uma conta só (marcas, cache, token do agente e pasta de exportação são da pasta dela). Para
+duas contas, instale duas vezes, cada uma com a sua porta:
+
+1. Peça dois zips gerados com `--porta`, um por conta (por exemplo 8765 e 8766). Cada zip já
+   sai com a porta no `config.exemplo.toml`, na extensão e no painel.
+2. Descompacte cada um na sua pasta (`C:\pepita-wa-conta1`, `C:\pepita-wa-conta2`) e faça
+   os passos 3 a 7 em cada pasta.
+3. No passo 4, cada `config.toml` leva a sua `[exportar] raiz` (pastas diferentes) e o seu
+   `[rotina] perfil` (o perfil do Chrome daquela conta).
+4. No passo 6, carregue cada pasta `extensao` **no perfil do Chrome da conta dela**. O ID muda
+   com a pasta: cada `config.toml` recebe o ID da sua extensão.
+5. No passo 7, um atalho em `shell:startup` para cada `servir-oculto.vbs`.
+6. No passo 9, dois MCP com nomes diferentes, cada um com o `python.exe` da sua pasta, por
+   exemplo `whatsapp` (conta 1) e `whatsapp2` (conta 2). Ler e enviar nunca cruzam de conta:
+   cada MCP fala só com o servidor da pasta dele.
+
+Ao trocar uma instalação antiga por um zip de outra porta (seção acima), o `config.toml`
+copiado traz a porta velha: ajuste `[servidor] porta` para a do zip novo.
+
+Conferir: o painel de cada perfil diz "pepita-wa no ar" com a versão, e o `wa status` de cada
+pasta mostra a sua porta. Se uma extensão mostrar o servidor fora do ar, confira o campo
+*porta* do painel: ele tem de ser o mesmo número do `[servidor] porta` daquela pasta.
+
 ## Bom saber
 
 - **Cota do plano gratuito:** cada áudio com fala é uma chamada ao `agy`. A primeira
