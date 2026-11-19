@@ -108,6 +108,29 @@ gera não tem assinatura, e o Smart App Control do Windows bloqueia (aviso da Se
 Windows, `os error 4551`). O Smart App Control não aceita exceção por pasta. Pelo mesmo
 motivo o Whisper saiu do Windows: o `_ext.pyd` do CTranslate2 também não tem assinatura.
 
+### Outro computador, sem WSL (e duas contas do WhatsApp)
+
+Para instalar num Windows sem a distro, gere o pacote completo: ele mede a fala dentro do
+próprio `wa servir` (`vad = "local"`) e leva o roteiro
+[`docs/instalar-outro-computador.md`](docs/instalar-outro-computador.md), que uma pessoa ou
+o Claude Code daquele computador segue passo a passo.
+
+```bash
+python ferramentas/pacote_completo.py --sufixo NOME
+```
+
+Cada instalação serve a uma conta do WhatsApp. Para **duas contas no mesmo computador**,
+gere um zip por conta com `--porta` (uma porta para cada): o zip já sai com a porta no
+`config.exemplo.toml`, na extensão e no painel, e leva `-portaN` no nome.
+
+```bash
+python ferramentas/pacote_completo.py --sufixo conta1 --porta 8765
+python ferramentas/pacote_completo.py --sufixo conta2 --porta 8766
+```
+
+Depois, cada zip numa pasta e cada extensão no perfil do Chrome da sua conta, com um MCP
+para cada (`whatsapp`, `whatsapp2`): o roteiro tem a seção "Duas contas".
+
 ## Uso
 
 1. Abra a conversa no WhatsApp Web e clique na seta de exportar, no cabeçalho da conversa
